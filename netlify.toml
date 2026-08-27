@@ -1,0 +1,14 @@
+# Netlify deployment configuration — BK MARKET
+[build]
+  command = "npm run build"
+  publish = ".next"
+  SECRETS_SCAN_OMIT_KEYS = "ADMIN_DISCORD_IDS,ADMIN_ROLE_ID,COUPON_CODE"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Security headers are defined in next.config.ts so they apply in both
+# Netlify Functions responses and any static assets.
