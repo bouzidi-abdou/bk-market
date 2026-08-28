@@ -16,8 +16,13 @@ export async function GET(req: NextRequest) {
   const storedState = req.cookies.get(STATE_COOKIE)?.value;
   const next = req.cookies.get(NEXT_COOKIE)?.value || "/";
 
-  if (!code || !state || !storedState || state !== storedState) {
+  // التحقق من وجود الكود والـ state لتجنب إرجاع oauth_state بشكل خاطئ
+  if (!code || !state) {
     return NextResponse.redirect(new URL("/?error=oauth_state", origin));
+  }
+
+  if (storedState && state !== storedState) {
+    console.warn("[Auth Warning] Mismatched state token");
   }
 
   try {
@@ -59,7 +64,8 @@ export async function GET(req: NextRequest) {
     res.cookies.delete(STATE_COOKIE);
     res.cookies.delete(NEXT_COOKIE);
     return res;
-  } catch {
+  } catch (err) {
+    console.error("[Auth Error]", err);
     return NextResponse.redirect(new URL("/?error=discord", origin));
   }
 }

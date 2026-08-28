@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { createSession, STATE_COOKIE, NEXT_COOKIE } from "@/lib/auth";
 import {
   isDiscordConfigured,
@@ -23,20 +23,28 @@ export async function GET(req: NextRequest) {
 
   const origin = req.nextUrl.origin;
   const nextParam = req.nextUrl.searchParams.get("next") || "/";
-  const safeNext = nextParam.startsWith("/") && !nextParam.startsWith("//")
-    ? nextParam
-    : "/";
+  const safeNext =
+    nextParam.startsWith("/") && !nextParam.startsWith("//")
+      ? nextParam
+      : "/";
 
   // Real Discord OAuth when credentials are configured
   if (isDiscordConfigured()) {
     const state = randomBytes(16).toString("hex");
     const res = NextResponse.redirect(buildAuthorizeUrl(origin, state));
+    
+    // ضبط الخيارات الخاصة بالكوكيز لتناسب بيئة Netlify و HTTPS
+    const isProduction =
+      process.env.NODE_ENV === "production" || origin.startsWith("https");
+
     const cookieBase = {
       httpOnly: true,
       sameSite: "lax" as const,
+      secure: isProduction,
       path: "/",
       maxAge: 600,
     };
+
     res.cookies.set(STATE_COOKIE, state, cookieBase);
     res.cookies.set(NEXT_COOKIE, safeNext, cookieBase);
     return res;
