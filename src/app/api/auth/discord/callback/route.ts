@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession, STATE_COOKIE, NEXT_COOKIE } from "@/lib/auth";
-import { exchangeCodeForToken, fetchDiscordUser, avatarUrl } from "@/lib/discord";
+import { exchangeCode, fetchDiscordUser, avatarUrl } from "@/lib/discord";
 
 export async function GET(req: NextRequest) {
   const host = req.headers.get("host");
@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokens = await exchangeCodeForToken(origin, code);
+    // تم تغيير اسم الدالة هنا إلى exchangeCode
+    const tokens = await exchangeCode(origin, code);
     if (!tokens || !tokens.access_token) {
       console.error("[auth] Failed to exchange code for token");
       return NextResponse.redirect(new URL("/?error=discord", origin));
