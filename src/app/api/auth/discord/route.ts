@@ -21,7 +21,11 @@ export async function GET(req: NextRequest) {
   );
   if (!rl.ok) return tooManyRequests(rl.retryAfter);
 
-  const origin = req.nextUrl.origin;
+  // 1. تحديد الـ origin الصحيح من الـ Host Header لقراءة الدومين الفعلي للمستخدم
+  const host = req.headers.get("host");
+  const protocol = req.headers.get("x-forwarded-proto") || "https";
+  const origin = host ? `${protocol}://${host}` : req.nextUrl.origin;
+
   const nextParam = req.nextUrl.searchParams.get("next") || "/";
   const safeNext =
     nextParam.startsWith("/") && !nextParam.startsWith("//")
@@ -33,7 +37,7 @@ export async function GET(req: NextRequest) {
     const state = randomBytes(16).toString("hex");
     const res = NextResponse.redirect(buildAuthorizeUrl(origin, state));
     
-    // ضبط الخيارات الخاصة بالكوكيز لتناسب بيئة Netlify و HTTPS
+    // ضبط الخيارات الخاصة بالكوكيز لتناسب البيئة المرفوعة و HTTPS
     const isProduction =
       process.env.NODE_ENV === "production" || origin.startsWith("https");
 
