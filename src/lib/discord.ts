@@ -9,15 +9,18 @@ function getCredentials() {
 
   if ((!clientId || !clientSecret) && process.env.DISCORD_OAUTH) {
     try {
-      const parsed = JSON.parse(process.env.DISCORD_OAUTH);
-      clientId = parsed.clientId || clientId;
-      clientSecret = parsed.clientSecret || clientSecret;
+      const parsed = typeof process.env.DISCORD_OAUTH === "string" 
+        ? JSON.parse(process.env.DISCORD_OAUTH) 
+        : process.env.DISCORD_OAUTH;
+        
+      clientId = parsed.clientId || parsed.client_id || clientId;
+      clientSecret = parsed.clientSecret || parsed.client_secret || clientSecret;
     } catch (e) {
       console.error("[Discord OAuth] JSON Parse Error:", e);
     }
   }
 
-  return { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
+  return { clientId: String(clientId).trim(), clientSecret: String(clientSecret).trim() };
 }
 
 export function isDiscordConfigured() {

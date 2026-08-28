@@ -20,14 +20,12 @@ export async function GET(req: NextRequest) {
       ? nextCookie
       : "/";
 
-  // Check state mismatch
   if (!code || !state || !savedState || state !== savedState) {
-    console.error("[auth] OAuth state mismatch or missing params", { code: !!code, state, savedState });
+    console.error("[auth] OAuth state mismatch or missing params");
     return NextResponse.redirect(new URL("/?error=discord", origin));
   }
 
   try {
-    // 💡 تم إصلاح ترتيب القيم وتحضير رابط الـ redirect الصحيح
     const redirectUri = getRedirectUri(origin);
     const tokens = await exchangeCode(code, redirectUri);
     

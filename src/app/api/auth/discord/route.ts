@@ -13,7 +13,6 @@ import { env } from "@/lib/env";
 import { getClientIp, rateLimit, tooManyRequests } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
-  // Brute-force / abuse protection on the authentication entry point
   const rl = rateLimit(
     `auth:${getClientIp(req)}`,
     env.RL_AUTH.limit,
@@ -21,7 +20,6 @@ export async function GET(req: NextRequest) {
   );
   if (!rl.ok) return tooManyRequests(rl.retryAfter);
 
-  // 1. تحديد الـ origin الصحيح من الـ Host Header لقراءة الدومين الفعلي للمستخدم
   const host = req.headers.get("host");
   const protocol = req.headers.get("x-forwarded-proto") || "https";
   const origin = host ? `${protocol}://${host}` : req.nextUrl.origin;
@@ -32,14 +30,11 @@ export async function GET(req: NextRequest) {
       ? nextParam
       : "/";
 
-  // Real Discord OAuth when credentials are configured
   if (isDiscordConfigured()) {
     const state = randomBytes(16).toString("hex");
     const res = NextResponse.redirect(buildAuthorizeUrl(origin, state));
     
-    // ضبط الخيارات الخاصة بالكوكيز لتناسب البيئة المرفوعة و HTTPS
-    const isProduction =
-      process.env.NODE_ENV === "production" || origin.startsWith("https");
+    const isProduction = process.env.NODE_ENV === "production" || origin.startsWith("https");
 
     const cookieBase = {
       httpOnly: true,
@@ -54,8 +49,6 @@ export async function GET(req: NextRequest) {
     return res;
   }
 
-  // Preview mode: sign in a demo Discord-styled identity so the full
-  // experience works before DISCORD_CLIENT_ID / SECRET are provided.
   try {
     const demoDiscordId = "984163515000000512";
     let [user] = await db
