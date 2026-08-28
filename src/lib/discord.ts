@@ -3,10 +3,9 @@ import { env } from "./env";
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const USER_URL = "https://discord.com/api/users/@me";
 
-// دالة جلب بيانات الاعتماد من المتغيرات بأكثر من طريقة لضمان العمل على Netlify
 function getCredentials() {
-  let clientId = env.DISCORD_CLIENT_ID || process.env.DISCORD_CLIENT_ID || "";
-  let clientSecret = env.DISCORD_CLIENT_SECRET || process.env.DISCORD_CLIENT_SECRET || "";
+  let clientId = process.env.DISCORD_CLIENT_ID || (env as any)?.DISCORD_CLIENT_ID || "";
+  let clientSecret = process.env.DISCORD_CLIENT_SECRET || (env as any)?.DISCORD_CLIENT_SECRET || "";
 
   if ((!clientId || !clientSecret) && process.env.DISCORD_OAUTH) {
     try {
@@ -14,16 +13,16 @@ function getCredentials() {
       clientId = parsed.clientId || clientId;
       clientSecret = parsed.clientSecret || clientSecret;
     } catch (e) {
-      console.error("[Discord Lib] Failed to parse DISCORD_OAUTH JSON:", e);
+      console.error("[Discord OAuth] JSON Parse Error:", e);
     }
   }
 
-  return { clientId, clientSecret };
+  return { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
 }
 
 export function isDiscordConfigured() {
   const { clientId, clientSecret } = getCredentials();
-  return !!(clientId && clientSecret);
+  return Boolean(clientId && clientSecret);
 }
 
 export function getRedirectUri(origin: string) {
@@ -47,6 +46,7 @@ export async function exchangeCode(code: string, redirectUri: string) {
   const { clientId, clientSecret } = getCredentials();
 
   if (!clientId || !clientSecret) {
+    console.error("[Discord OAuth Error] Missing credentials in production environment.");
     throw new Error("Missing Discord Client ID or Client Secret");
   }
 
@@ -66,9 +66,9 @@ export async function exchangeCode(code: string, redirectUri: string) {
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    console.error(`[Discord OAuth Failed] Status: ${res.status}, Response: ${errorText}`);
-    throw new Error(`Token exchange failed: ${res.status}`);
+    const errorBody = await res.text();
+    console.error(`[Discord OAuth Failed] Status: ${res.status} | Body: ${errorBody}`);
+    throw new Error(`Token exchange failed with status ${res.status}`);
   }
 
   return (await res.json()) as { access_token: string };
