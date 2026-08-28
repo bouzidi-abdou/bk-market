@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession, STATE_COOKIE, NEXT_COOKIE } from "@/lib/auth";
-import { exchangeCode, fetchDiscordUser, avatarUrl } from "@/lib/discord";
+import { exchangeCode, fetchDiscordUser, avatarUrl, getRedirectUri } from "@/lib/discord";
 
 export async function GET(req: NextRequest) {
   const host = req.headers.get("host");
@@ -22,13 +22,15 @@ export async function GET(req: NextRequest) {
 
   // Check state mismatch
   if (!code || !state || !savedState || state !== savedState) {
-    console.error("[auth] OAuth state mismatch or missing params");
+    console.error("[auth] OAuth state mismatch or missing params", { code: !!code, state, savedState });
     return NextResponse.redirect(new URL("/?error=discord", origin));
   }
 
   try {
-    // تم تغيير اسم الدالة هنا إلى exchangeCode
-    const tokens = await exchangeCode(origin, code);
+    // 💡 تم إصلاح ترتيب القيم وتحضير رابط الـ redirect الصحيح
+    const redirectUri = getRedirectUri(origin);
+    const tokens = await exchangeCode(code, redirectUri);
+    
     if (!tokens || !tokens.access_token) {
       console.error("[auth] Failed to exchange code for token");
       return NextResponse.redirect(new URL("/?error=discord", origin));
