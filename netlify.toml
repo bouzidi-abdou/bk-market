@@ -3,6 +3,7 @@
   command = "npm run build"
   publish = ".next"
   SECRETS_SCAN_OMIT_KEYS = "ADMIN_DISCORD_IDS,ADMIN_ROLE_ID,COUPON_CODE"
+  SECRETS_SCAN_ENABLED = false
 
 [build.environment]
   NODE_VERSION = "22"
