@@ -1,54 +1,73 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { createSession, STATE_COOKIE, NEXT_COOKIE } from "@/lib/auth";
-import {
-  exchangeCode,
-  fetchDiscordUser,
-  getRedirectUri,
-  avatarUrl,
-} from "@/lib/discord";
+import { exchangeCodeForToken, fetchDiscordUser, avatarUrl } from "@/lib/discord";
 
 export async function GET(req: NextRequest) {
-  const origin = req.nextUrl.origin;
+  const host = req.headers.get("host");
+  const protocol = req.headers.get("x-forwarded-proto") || "https";
+  const origin = host ? `${protocol}://${host}` : req.nextUrl.origin;
+
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
-  const storedState = req.cookies.get(STATE_COOKIE)?.value;
-  const next = req.cookies.get(NEXT_COOKIE)?.value || "/";
+  const savedState = req.cookies.get(STATE_COOKIE)?.value;
+  const nextCookie = req.cookies.get(NEXT_COOKIE)?.value;
 
-  // التحقق من وجود الكود والـ state لتجنب إرجاع oauth_state بشكل خاطئ
-  if (!code || !state) {
-    return NextResponse.redirect(new URL("/?error=oauth_state", origin));
-  }
+  const safeNext =
+    nextCookie && nextCookie.startsWith("/") && !nextCookie.startsWith("//")
+      ? nextCookie
+      : "/";
 
-  if (storedState && state !== storedState) {
-    console.warn("[Auth Warning] Mismatched state token");
+  // Check state mismatch
+  if (!code || !state || !savedState || state !== savedState) {
+    console.error("[auth] OAuth state mismatch or missing params");
+    return NextResponse.redirect(new URL("/?error=discord", origin));
   }
 
   try {
-    const { access_token } = await exchangeCode(code, getRedirectUri(origin));
-    const du = await fetchDiscordUser(access_token);
+    const tokens = await exchangeCodeForToken(origin, code);
+    if (!tokens || !tokens.access_token) {
+      console.error("[auth] Failed to exchange code for token");
+      return NextResponse.redirect(new URL("/?error=discord", origin));
+    }
 
-    const [user] = await db
-      .insert(users)
-      .values({
-        discordId: du.id,
-        username: du.username,
-        globalName: du.global_name,
-        avatar: du.avatar,
-        email: du.email ?? null,
-      })
-      .onConflictDoUpdate({
-        target: users.discordId,
-        set: {
-          username: du.username,
-          globalName: du.global_name,
-          avatar: du.avatar,
-          email: du.email ?? null,
+    const discordUser = await fetchDiscordUser(tokens.access_token);
+    if (!discordUser || !discordUser.id) {
+      console.error("[auth] Failed to fetch Discord user");
+      return NextResponse.redirect(new URL("/?error=discord", origin));
+    }
+
+    let [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordId, discordUser.id))
+      .limit(1);
+
+    if (!user) {
+      [user] = await db
+        .insert(users)
+        .values({
+          discordId: discordUser.id,
+          username: discordUser.username,
+          globalName: discordUser.global_name || discordUser.username,
+          avatar: discordUser.avatar,
+          email: discordUser.email,
+        })
+        .returning();
+    } else {
+      await db
+        .update(users)
+        .set({
+          username: discordUser.username,
+          globalName: discordUser.global_name || discordUser.username,
+          avatar: discordUser.avatar,
+          email: discordUser.email,
           lastLoginAt: new Date(),
-        },
-      })
-      .returning();
+        })
+        .where(eq(users.id, user.id));
+    }
 
     await createSession({
       id: user.id,
@@ -58,14 +77,12 @@ export async function GET(req: NextRequest) {
       avatar: avatarUrl(user.discordId, user.avatar),
     });
 
-    const res = NextResponse.redirect(
-      new URL(next.startsWith("/") ? next : "/", origin)
-    );
+    const res = NextResponse.redirect(new URL(safeNext, origin));
     res.cookies.delete(STATE_COOKIE);
     res.cookies.delete(NEXT_COOKIE);
     return res;
-  } catch (err) {
-    console.error("[Auth Error]", err);
+  } catch (e) {
+    console.error("[auth] OAuth callback error:", e);
     return NextResponse.redirect(new URL("/?error=discord", origin));
   }
 }
